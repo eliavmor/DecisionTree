@@ -189,12 +189,12 @@ if __name__ == "__main__":
     # Split the data into training and testing sets (80% train, 20% test)
     X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
 
-    dt = DecisionTree(criterion="entropy")
+    dt = DecisionTree(criterion="gini_index")
     train_errors, test_errors = [], []
     tree_depths = list(np.arange(1, 13).astype(int))
     for i in tree_depths:
         np.random.seed(100)
-        dt.fit(X=X_train, Y=Y_train, max_depth=i, min_samples_split=1)
+        dt.fit(X=X_train, Y=Y_train, max_depth=i, min_samples_split=2)
         Y_prime_test = dt.predict(X_test)
         Y_prime_train = dt.predict(X_train)
 
