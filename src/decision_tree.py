@@ -35,7 +35,7 @@ class Node:
         if self.is_leaf():
             print(f"{indent}{prefix} -> Leaf: predicted label={self.value} based on {self.count} samples.")
         else:
-            print(f"{indent}{prefix} -> Feature {self.feature_idx} <= {self.split_value}")
+            print(f"{indent}{prefix} -> Feature {self.feature_idx + 1} <= {self.split_value}")
             if self.left:
                 self.left.print_tree(level + 1, prefix="L")
             if self.right:
@@ -75,7 +75,7 @@ class DecisionTree:
         return X[left_mask, :], Y[left_mask], X[~left_mask, :], Y[~left_mask]
 
     def _rank_splits(self, X, Y, n_features_select, min_samples_split):
-        feature_idx = np.argmax(np.apply_along_axis(func1d=self.criterion, axis=0, arr=X))
+        feature_idx = np.argmin(np.apply_along_axis(func1d=self.criterion, axis=0, arr=X))
         feature_values = np.unique(X[:, feature_idx])
         feature_values = np.random.choice(feature_values,
                                           size=len(feature_values) if n_features_select is None else min(
@@ -88,15 +88,17 @@ class DecisionTree:
                 continue
             IG = self._information_gain(Y=Y, Y_l=Y_l, Y_r=Y_r)
             ranks.append((feature_idx, split_value, IG))
+
         if not len(ranks):
             raise Exception(
                 f"DecisionTree.fit failed. Consider to decrease min_samples_split={min_samples_split} "
                 f"or setting n_features_select=None")
+
         ranks = sorted(ranks, key=lambda x: -x[-1])
         return ranks
 
     def _build_tree(self, X, Y, max_depth, min_samples_split, min_samples_leaf, n_features_select):
-        if max_depth == 0:
+        if max_depth == -1:
             return None
 
         split_ranks = self._rank_splits(X=X, Y=Y, n_features_select=n_features_select,
@@ -109,12 +111,12 @@ class DecisionTree:
             most_common = Counter(Y).most_common(1).pop()
             X_l, Y_l, X_r, Y_r = self._split_data(X=X, Y=Y, feature_idx=feature_idx, split_value=split_value)
 
-            if max_depth > 1 and (len(Y_l) < min_samples_split or len(Y_r) < min_samples_split):
-                print("max_depth > 1 and (len(Y_l) < min_samples_split or len(Y_r) < min_samples_split)")
+            if max_depth > 0 and (len(Y_l) < min_samples_split or len(Y_r) < min_samples_split):
+                print("max_depth > 0 and (len(Y_l) < min_samples_split or len(Y_r) < min_samples_split)")
                 continue
 
-            if max_depth == 1 and (len(Y_l) < min_samples_leaf or len(Y_r) < min_samples_leaf):
-                print("max_depth == 1 and (len(Y_l) < min_samples_leaf or len(Y_r) < min_samples_leaf)")
+            if max_depth == 0 and (len(Y_l) < min_samples_leaf or len(Y_r) < min_samples_leaf):
+                print("max_depth == 0 and (len(Y_l) < min_samples_leaf or len(Y_r) < min_samples_leaf)")
                 continue
             try:
                 left = self._build_tree(X=X_l, Y=Y_l, max_depth=max_depth - 1, min_samples_split=min_samples_split,
@@ -124,7 +126,7 @@ class DecisionTree:
             except Exception as e:
                 continue
             tree = Node(feature_idx=feature_idx, split_value=split_value, left=left, right=right,
-                             value=most_common[0], count=most_common[1])
+                        value=most_common[0], count=most_common[1])
             return tree
 
         raise Exception(
@@ -137,8 +139,8 @@ class DecisionTree:
 
         if tree.left.is_leaf() and tree.right.is_leaf() and tree.left.value == tree.right.value:
             return Node(tree.left.feature_idx, tree.left.split_value,
-                             left=None, right=None, value=tree.left.value,
-                             count=tree.left.count + tree.right.count)
+                        left=None, right=None, value=tree.left.value,
+                        count=tree.left.count + tree.right.count)
 
         tree.left = self._prune_tree_helper(tree=tree.left)
         tree.right = self._prune_tree_helper(tree=tree.right)
@@ -169,6 +171,9 @@ class DecisionTree:
         self.tree = self._prune_tree(tree=tree)
         self._fit = True
 
+    def print_tree(self):
+        self.tree.print_tree()
+
     def predict(self, X):
         try:
             return self.tree.predict(X=X)
@@ -177,10 +182,15 @@ class DecisionTree:
 
 
 if __name__ == "__main__":
+    from sklearn.tree import DecisionTreeClassifier
+    from sklearn.tree import plot_tree
     from sklearn.datasets import load_iris
     from sklearn.model_selection import train_test_split
     import matplotlib.pyplot as plt
     import numpy as np
+
+    feature_names = ['feature1', 'feature2', 'feature3', 'feature4']  # Replace with actual names
+    class_names = ['class1', 'class2', 'class3']
 
     # Load dataset
     iris = load_iris()
@@ -191,26 +201,50 @@ if __name__ == "__main__":
 
     dt = DecisionTree(criterion="gini_index")
     train_errors, test_errors = [], []
-    tree_depths = list(np.arange(1, 13).astype(int))
+    sklearn_train_errors, sklearn_test_errors = [], []
+    tree_depths = list(np.arange(1, 9).astype(int))
     for i in tree_depths:
         np.random.seed(100)
+        dt_sklearn = DecisionTreeClassifier(criterion="gini", max_depth=i, min_samples_split=2, min_samples_leaf=1,
+                                            random_state=100)
         dt.fit(X=X_train, Y=Y_train, max_depth=i, min_samples_split=2)
+        dt_sklearn.fit(X=X_train, y=Y_train)
+
         Y_prime_test = dt.predict(X_test)
         Y_prime_train = dt.predict(X_train)
+
+        sklearn_Y_prime_test = dt_sklearn.predict(X_test)
+        sklearn_Y_prime_train = dt_sklearn.predict(X_train)
 
         # Calculate test error
         test_error = np.sum(Y_prime_test != Y_test) / len(Y_test)
         train_error = np.sum(Y_prime_train != Y_train) / len(Y_train)
+
+        sklearn_test_error = np.sum(sklearn_Y_prime_test != Y_test) / len(Y_test)
+        sklearn_train_error = np.sum(sklearn_Y_prime_train != Y_train) / len(Y_train)
+
         train_errors.append(train_error)
         test_errors.append(test_error)
-        print(f"Max Depth: {i}, Train Error: {train_error:.4f}, Test Error: {test_error:.4f}")
+        sklearn_train_errors.append(sklearn_train_error)
+        sklearn_test_errors.append(sklearn_test_error)
+        print(f"Numpy Max Depth: {i}, Train Error: {train_error:.4f}, Test Error: {test_error:.4f}")
+        print(f"Sklearn Max Depth: {i}, Train Error: {sklearn_train_error:.4f}, Test Error: {sklearn_test_error:.4f}")
+        print("=" * 100)
 
     plt.plot(tree_depths, train_errors, label="train error", marker='o')
     plt.plot(tree_depths, test_errors, label="test error", marker='x')
     plt.legend()
-    plt.title("Decision Tree Error - Iris Dataset")
+    plt.title("NumPy Decision Tree Error - Iris Dataset")
     plt.ylabel("error")
     plt.xlabel("tree-depth")
     plt.grid()
     plt.show()
 
+    plt.plot(tree_depths, sklearn_train_errors, label="train error", marker='o')
+    plt.plot(tree_depths, sklearn_test_errors, label="test error", marker='x')
+    plt.legend()
+    plt.title("Sklearn Decision Tree Error - Iris Dataset")
+    plt.ylabel("error")
+    plt.xlabel("tree-depth")
+    plt.grid()
+    plt.show()
