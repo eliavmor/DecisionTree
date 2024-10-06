@@ -75,24 +75,24 @@ class DecisionTree:
         return X[left_mask, :], Y[left_mask], X[~left_mask, :], Y[~left_mask]
 
     def _rank_splits(self, X, Y, n_features_select, min_samples_split):
-        feature_idx = np.argmin(np.apply_along_axis(func1d=self.criterion, axis=0, arr=X))
-        feature_values = np.unique(X[:, feature_idx])
-        feature_values = np.random.choice(feature_values,
-                                          size=len(feature_values) if n_features_select is None else min(
-                                              len(feature_values), n_features_select), replace=False)
-
         ranks = []
-        for split_value in feature_values:
-            X_l, Y_l, X_r, Y_r = self._split_data(X=X, Y=Y, feature_idx=feature_idx, split_value=split_value)
-            if len(Y_l) < min_samples_split or len(Y_r) < min_samples_split:
-                continue
-            IG = self._information_gain(Y=Y, Y_l=Y_l, Y_r=Y_r)
-            ranks.append((feature_idx, split_value, IG))
+        for feature_idx in range(X.shape[1]):
+            feature_values = np.unique(X[:, feature_idx])
+            feature_values = np.random.choice(feature_values,
+                                              size=len(feature_values) if n_features_select is None else min(
+                                                  len(feature_values), n_features_select), replace=False)
 
-        if not len(ranks):
-            raise Exception(
-                f"DecisionTree.fit failed. Consider to decrease min_samples_split={min_samples_split} "
-                f"or setting n_features_select=None")
+            for split_value in feature_values:
+                X_l, Y_l, X_r, Y_r = self._split_data(X=X, Y=Y, feature_idx=feature_idx, split_value=split_value)
+                if len(Y_l) < min_samples_split or len(Y_r) < min_samples_split:
+                    continue
+                IG = self._information_gain(Y=Y, Y_l=Y_l, Y_r=Y_r)
+                ranks.append((feature_idx, split_value, IG))
+
+            if not len(ranks):
+                raise Exception(
+                    f"DecisionTree.fit failed. Consider to decrease min_samples_split={min_samples_split} "
+                    f"or setting n_features_select=None")
 
         ranks = sorted(ranks, key=lambda x: -x[-1])
         return ranks
