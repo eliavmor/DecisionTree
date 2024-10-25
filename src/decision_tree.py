@@ -84,15 +84,8 @@ class DecisionTree:
 
             for split_value in feature_values:
                 X_l, Y_l, X_r, Y_r = self._split_data(X=X, Y=Y, feature_idx=feature_idx, split_value=split_value)
-                if len(Y_l) < min_samples_split or len(Y_r) < min_samples_split:
-                    continue
                 IG = self._information_gain(Y=Y, Y_l=Y_l, Y_r=Y_r)
                 ranks.append((feature_idx, split_value, IG))
-
-            if not len(ranks):
-                raise Exception(
-                    f"DecisionTree.fit failed. Consider to decrease min_samples_split={min_samples_split} "
-                    f"or setting n_features_select=None")
 
         ranks = sorted(ranks, key=lambda x: -x[-1])
         return ranks
@@ -103,6 +96,7 @@ class DecisionTree:
 
         split_ranks = self._rank_splits(X=X, Y=Y, n_features_select=n_features_select,
                                         min_samples_split=min_samples_split)
+
         if len(np.unique(Y)) == 1:
             return Node(feature_idx=0, split_value=0, left=None, right=None, value=np.unique(Y)[0], count=len(Y))
 
@@ -111,12 +105,10 @@ class DecisionTree:
             most_common = Counter(Y).most_common(1).pop()
             X_l, Y_l, X_r, Y_r = self._split_data(X=X, Y=Y, feature_idx=feature_idx, split_value=split_value)
 
-            if max_depth > 0 and (len(Y_l) < min_samples_split or len(Y_r) < min_samples_split):
-                print("max_depth > 0 and (len(Y_l) < min_samples_split or len(Y_r) < min_samples_split)")
+            if max_depth > 1 and (len(Y_l) < min_samples_split or len(Y_r) < min_samples_split):
                 continue
 
             if max_depth == 0 and (len(Y_l) < min_samples_leaf or len(Y_r) < min_samples_leaf):
-                print("max_depth == 0 and (len(Y_l) < min_samples_leaf or len(Y_r) < min_samples_leaf)")
                 continue
             try:
                 left = self._build_tree(X=X_l, Y=Y_l, max_depth=max_depth - 1, min_samples_split=min_samples_split,
@@ -204,11 +196,11 @@ if __name__ == "__main__":
     sklearn_train_errors, sklearn_test_errors = [], []
     tree_depths = list(np.arange(1, 9).astype(int))
     for i in tree_depths:
-        np.random.seed(100)
         dt_sklearn = DecisionTreeClassifier(criterion="gini", max_depth=i, min_samples_split=2, min_samples_leaf=1,
                                             random_state=100)
-        dt.fit(X=X_train, Y=Y_train, max_depth=i, min_samples_split=2)
         dt_sklearn.fit(X=X_train, y=Y_train)
+        np.random.seed(100)
+        dt.fit(X=X_train, Y=Y_train, max_depth=i, min_samples_split=2)
 
         Y_prime_test = dt.predict(X_test)
         Y_prime_train = dt.predict(X_train)
